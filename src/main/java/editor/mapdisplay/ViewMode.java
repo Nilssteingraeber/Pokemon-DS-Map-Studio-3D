@@ -20,9 +20,10 @@ import javax.swing.SwingUtilities;
 public abstract class ViewMode {
 
     public enum ViewID {
-        VIEW_3D, VIEW_ORTHO, VIEW_HEIGHT
+        EDIT_3D, VIEW_3D, VIEW_ORTHO, VIEW_HEIGHT
     }
 
+    public static Edit3dMode EDIT_3D_MODE = new Edit3dMode();
     public static View3dMode VIEW_3D_MODE = new View3dMode();
     public static ViewOrthoMode VIEW_ORTHO_MODE = new ViewOrthoMode();
     public static ViewHeightMode VIEW_HEIGHT_MODE = new ViewHeightMode();

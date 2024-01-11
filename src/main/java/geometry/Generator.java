@@ -1,7 +1,9 @@
 
 package geometry;
 
+import editor.mapdisplay.MapDisplay;
 import graphicslib3D.Matrix3D;
+import math.vec.Vec3f;
 
 /**
  * @author Trifindo
@@ -33,6 +35,32 @@ public class Generator {
         return grid;
     }
 
+    public static float[] generateEditPlane(float size, Vec3f origin, MapDisplay.EditPlaneOrientation orientation) {
+        float[] vertices = new float[4 * 3];
+
+        switch (orientation) {
+            case XY:
+                set3f(vertices, 0, origin.x - size / 2, origin.y + size / 2, 0.0f);
+                set3f(vertices, 3, origin.x + size / 2, origin.y + size / 2, 0.0f);
+                set3f(vertices, 6, origin.x + size / 2, origin.y - size / 2, 0.0f);
+                set3f(vertices, 9, origin.x - size / 2, origin.y - size / 2, 0.0f);
+                break;
+            case XZ:
+                set3f(vertices, 0, origin.x - size / 2, 0.0f, origin.z + size / 2);
+                set3f(vertices, 3, origin.x + size / 2, 0.0f, origin.z + size / 2);
+                set3f(vertices, 6, origin.x + size / 2, 0.0f, origin.z - size / 2);
+                set3f(vertices, 9, origin.x - size / 2, 0.0f, origin.z - size / 2);
+                break;
+            case ZY:
+                set3f(vertices, 0, 0.0f, origin.y - size / 2, origin.z + size / 2);
+                set3f(vertices, 3, 0.0f, origin.y + size / 2, origin.z + size / 2);
+                set3f(vertices, 6, 0.0f, origin.y + size / 2, origin.z - size / 2);
+                set3f(vertices, 9, 0.0f, origin.y - size / 2, origin.z - size / 2);
+                break;
+        }
+
+        return vertices;
+    }
 
     public static float[] generateGridColors(int cols, int rows,
                                              float[] rgbaTop, float[] rgbaBot, float[] rgbaLeft, float[] rgbaRight) {

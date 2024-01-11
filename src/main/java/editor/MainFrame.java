@@ -519,6 +519,11 @@ public class MainFrame extends JFrame {
         mapDisplay.repaint();
     }
 
+    private void jtbEdit3DActionPerformed(ActionEvent e) {
+        mapDisplay.set3DEdit();
+        mapDisplay.repaint();
+    }
+
     private void jtbViewOrthoActionPerformed(ActionEvent e) {
         mapDisplay.setOrthoView();
         mapDisplay.repaint();
@@ -2272,6 +2277,8 @@ public class MainFrame extends JFrame {
         return jtbView3D;
     }
 
+    public JToggleButton getJtbEdit3D() { return jtbEdit3D; }
+
     public JToggleButton getJtbViewOrtho() {
         return jtbViewOrtho;
     }
@@ -2362,7 +2369,7 @@ public class MainFrame extends JFrame {
     }
 
     public void updateMapDisplaySize(){
-        if(mapDisplay.getViewMode() == ViewMode.VIEW_3D_MODE){
+        if(mapDisplay.getViewMode() == ViewMode.VIEW_3D_MODE || mapDisplay.getViewMode() == ViewMode.EDIT_3D_MODE){
             mapDisplay.setPreferredSize(mapDisplayContainer.getSize());
             mapDisplayContainer.revalidate();
         } else {
@@ -2510,6 +2517,7 @@ public class MainFrame extends JFrame {
         jpView = new JPanel();
         jtView = new JToolBar();
         jtbView3D = new JToggleButton();
+        jtbEdit3D = new JToggleButton();
         jtbViewOrtho = new JToggleButton();
         jtbViewHeight = new JToggleButton();
         jtbViewGrid = new JToggleButton();
@@ -3535,6 +3543,15 @@ public class MainFrame extends JFrame {
                             jtView.setOrientation(SwingConstants.VERTICAL);
                             jtView.setRollover(true);
 
+                            //---- jtbEdit3D ----
+                            jtbEdit3D.setIcon(new ImageIcon(getClass().getResource("/icons/3DViewIcon.png")));
+                            jtbEdit3D.setToolTipText("3D Edit");
+                            jtbEdit3D.setFocusable(false);
+                            jtbEdit3D.setHorizontalTextPosition(SwingConstants.CENTER);
+                            jtbEdit3D.setVerticalTextPosition(SwingConstants.BOTTOM);
+                            jtbEdit3D.addActionListener(e -> jtbEdit3DActionPerformed(e));
+                            jtView.add(jtbEdit3D);
+
                             //---- jtbView3D ----
                             jtbView3D.setIcon(new ImageIcon(getClass().getResource("/icons/3DViewIcon.png")));
                             jtbView3D.setToolTipText("3D View");
@@ -4135,6 +4152,7 @@ public class MainFrame extends JFrame {
 
         //---- buttonGroupViewMode ----
         ButtonGroup buttonGroupViewMode = new ButtonGroup();
+        buttonGroupViewMode.add(jtbEdit3D);
         buttonGroupViewMode.add(jtbView3D);
         buttonGroupViewMode.add(jtbViewOrtho);
         buttonGroupViewMode.add(jtbViewHeight);
@@ -4249,6 +4267,8 @@ public class MainFrame extends JFrame {
     private JPanel jpView;
     private JToolBar jtView;
     private JToggleButton jtbView3D;
+
+    private JToggleButton jtbEdit3D;
     private JToggleButton jtbViewOrtho;
     private JToggleButton jtbViewHeight;
     private JToggleButton jtbViewGrid;

@@ -4,35 +4,9 @@ package editor.mapdisplay;
 import com.jogamp.common.nio.Buffers;
 import editor.handler.MapEditorHandler;
 
-import static com.jogamp.opengl.GL.GL_BACK;
-import static com.jogamp.opengl.GL.GL_BLEND;
-import static com.jogamp.opengl.GL.GL_COLOR_BUFFER_BIT;
-import static com.jogamp.opengl.GL.GL_DEPTH_BUFFER_BIT;
-import static com.jogamp.opengl.GL.GL_DEPTH_TEST;
-import static com.jogamp.opengl.GL.GL_FRONT_AND_BACK;
-import static com.jogamp.opengl.GL.GL_GREATER;
-import static com.jogamp.opengl.GL.GL_LEQUAL;
-import static com.jogamp.opengl.GL.GL_LESS;
-import static com.jogamp.opengl.GL.GL_LINEAR_MIPMAP_LINEAR;
-import static com.jogamp.opengl.GL.GL_LINES;
-import static com.jogamp.opengl.GL.GL_NEAREST;
-import static com.jogamp.opengl.GL.GL_NOTEQUAL;
-import static com.jogamp.opengl.GL.GL_NO_ERROR;
-import static com.jogamp.opengl.GL.GL_ONE;
-import static com.jogamp.opengl.GL.GL_ONE_MINUS_DST_ALPHA;
-import static com.jogamp.opengl.GL.GL_ONE_MINUS_SRC_ALPHA;
-import static com.jogamp.opengl.GL.GL_REPEAT;
-import static com.jogamp.opengl.GL.GL_RGBA;
-import static com.jogamp.opengl.GL.GL_SRC_ALPHA;
-import static com.jogamp.opengl.GL.GL_TEXTURE_2D;
-import static com.jogamp.opengl.GL.GL_TEXTURE_MAG_FILTER;
-import static com.jogamp.opengl.GL.GL_TEXTURE_MIN_FILTER;
-import static com.jogamp.opengl.GL.GL_TEXTURE_WRAP_S;
-import static com.jogamp.opengl.GL.GL_TEXTURE_WRAP_T;
-import static com.jogamp.opengl.GL.GL_UNSIGNED_BYTE;
-
 import com.jogamp.opengl.GL2;
 
+import static com.jogamp.opengl.GL.*;
 import static com.jogamp.opengl.GL2ES1.GL_ALPHA_TEST;
 import static com.jogamp.opengl.GL2ES3.GL_TRIANGLES;
 import static com.jogamp.opengl.GL2ES3.GL_QUADS;
@@ -80,11 +54,7 @@ import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import javax.swing.SwingUtilities;
 
 import math.mat.Mat4f;
@@ -139,6 +109,19 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
             new Vec4f(-MapGrid.cols / 2, +MapGrid.rows / 2, 0.0f, 0.0f)
     };
     protected final float fovDeg = 60.0f;
+
+    /** 3D-Drawing and collision stuff **/
+    protected Vec3f mouseVector_WSP = new Vec3f(0, 0, 0);
+
+    protected Vec3f mouseVectorOrigin_WSP = new Vec3f(0, 0, 0);
+
+    protected Vec3f editPlaneOrigin_WSP = new Vec3f(0, 0, 0);
+
+    protected Vec3f editPlaneNormal_WSP = new Vec3f(0, 1, 0);
+
+    protected EditPlaneOrientation currentEditPlaneOrientation = EditPlaneOrientation.XY;
+    protected float[] editPlane_F;
+
     //protected HashMap<Point, MapData> filteredMaps;
     //protected Vec3f[][] frustum;
     //protected final float zNear = 1.0f;
@@ -178,6 +161,11 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
     //View Modes
     protected ViewMode viewMode = ViewMode.VIEW_ORTHO_MODE;
 
+    public static enum EditPlaneOrientation {
+        XY,
+        XZ,
+        ZY
+    }
     //Edit Modes
     public static enum EditMode {
 
@@ -236,6 +224,8 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         grid = Generator.generateCenteredGrid(cols, rows, gridTileSize, 0.02f);
         gridBuffer = Buffers.newDirectFloatBuffer(grid);
         axis = Generator.generateAxis(100.0f);
+        editPlane_F = Generator.generateEditPlane(100f, new Vec3f(0, 0, 0), EditPlaneOrientation.XZ);
+
 
         //Load textures into OpenGL
         handler.getTileset().loadTexturesGL();
@@ -322,6 +312,8 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
             if (drawAreasEnabled) {
                 drawAllContourLines(gl);
             }
+
+            drawEditPlane();
 
             //Screenshot
             if (screenshotRequested) {
@@ -724,6 +716,28 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         for (int i = 0; i < axis.length; i += 3) {
             gl.glColor3fv(axisColors, i);
             gl.glVertex3fv(axis, i);
+        }
+
+        gl.glEnd();
+    }
+
+    protected void drawEditPlane() {
+        GL2 gl = (GL2) GLContext.getCurrentGL();
+
+        gl.glEnable(GL_BLEND);
+
+        gl.glEnable(GL_BLEND);
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        gl.glBegin(GL_QUADS);
+
+        gl.glColor3fv(new float[]{1.0f, 0, 0}, 0);
+
+        editPlane_F = Generator.generateEditPlane(3, new Vec3f(0, 0, 0), currentEditPlaneOrientation);
+
+        for (int i = 0; i < editPlane_F.length; i += 3) {
+            gl.glColor4fv(new float[]{1.0f, 0, 0, 0.5f}, 0);
+            gl.glVertex3fv(editPlane_F, i);
         }
 
         gl.glEnd();
@@ -1166,6 +1180,51 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         yMouse = (int) ((((float) e.getY() / getHeight() - (1.0f - orthoScale) / 2) * height) / orthoScale - cameraY * tileSize);
     }
 
+    protected void updateMouseWorldRay(MouseEvent e) {
+        screenPositionToWorldRay(e);
+
+        Vec3f hitpoint = new Vec3f(0, 0, 0);
+
+        Vec3f rayOrigin = mouseVectorOrigin_WSP;
+        Vec3f ray = new Vec3f(rayOrigin);
+        Vec3f normal = new Vec3f(0, 0, 1);
+        Vec3f planeCenter = new Vec3f(0, 1, 0);
+
+        hitpoint = intersectPoint(ray, rayOrigin, normal, planeCenter);
+    }
+
+    public static Vec3f intersectPoint(Vec3f rayVector, Vec3f rayPoint, Vec3f planeNormal, Vec3f planePoint) {
+        Vec3f diff = rayPoint.sub(planePoint);
+        double prod1 = diff.dot(planeNormal);
+        double prod2 = rayVector.dot(planeNormal);
+        double prod3 = prod1 / prod2;
+        return rayPoint.sub(rayVector.scale((float) prod3));
+    }
+
+    protected void screenPositionToWorldRay(MouseEvent e) {
+
+        float xMouse = ((((float) e.getX() / getWidth())));
+        float yMouse = ((((float) e.getY() / getHeight())));
+
+        Vec4f screenPos = new Vec4f(((float) xMouse) * 2 - 1, ((float) -yMouse) * 2 + 1, 0, 1.0f);
+        Vec4f a = screenPos;
+        a.mul(camMVP.inverse());
+        float xMouse3d = a.x / a.w;
+        float yMouse3d = a.y / a.w;
+        float zMouse3d = a.z / a.w;
+
+        screenPos = new Vec4f(((float) xMouse) * 2 - 1, ((float) -yMouse) * 2 + 1, 1, 1.0f);
+        Vec4f b = screenPos;
+        b.mul(camMVP);
+
+        float xMouse3dF = b.x / b.w;
+        float yMouse3dF = b.y / b.w;
+        float zMouse3dF = b.z / b.w;
+
+        mouseVector_WSP = new Vec3f(xMouse3dF - xMouse3d, yMouse3dF - yMouse3d, zMouse3dF - zMouse3d);
+        mouseVectorOrigin_WSP = new Vec3f(xMouse3d, yMouse3d, zMouse3dF);
+    }
+
     protected void zoomCameraOrtho(MouseWheelEvent e) {
         if (e.getWheelRotation() > 0) {
             orthoScale /= 1.1;
@@ -1444,6 +1503,28 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         handler.getMainFrame().updateMapDisplaySize();
     }
 
+    public void set3DEdit() {
+        viewMode = ViewMode.EDIT_3D_MODE;
+        handler.getMainFrame().getJtbEdit3D().setSelected(true);
+
+        cameraRotX = defaultCamRotX;
+        cameraRotY = defaultCamRotY;
+        cameraRotZ = defaultCamRotZ;
+
+        cameraZ = 80.0f;
+
+        handler.getMainFrame().getJtbModeClear().setEnabled(false);
+        handler.getMainFrame().getJtbModeSmartPaint().setEnabled(false);
+        handler.getMainFrame().getJtbModeInvSmartPaint().setEnabled(false);
+
+        if (editMode == EditMode.MODE_CLEAR || editMode == EditMode.MODE_SMART_PAINT || editMode == EditMode.MODE_INV_SMART_PAINT) {
+            handler.getMainFrame().getJtbEdit3D().setSelected(true);
+            setEditMode(EditMode.MODE_EDIT);
+        }
+
+        handler.getMainFrame().updateMapDisplaySize();
+    }
+
     public void set3DView() {
         viewMode = ViewMode.VIEW_3D_MODE;
         handler.getMainFrame().getJtbView3D().setSelected(true);
@@ -1459,7 +1540,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         handler.getMainFrame().getJtbModeInvSmartPaint().setEnabled(false);
 
         if (editMode == EditMode.MODE_CLEAR || editMode == EditMode.MODE_SMART_PAINT || editMode == EditMode.MODE_INV_SMART_PAINT) {
-            handler.getMainFrame().getJtbModeEdit().setSelected(true);
+            handler.getMainFrame().getJtbView3D().setSelected(true);
             setEditMode(EditMode.MODE_EDIT);
         }
 
