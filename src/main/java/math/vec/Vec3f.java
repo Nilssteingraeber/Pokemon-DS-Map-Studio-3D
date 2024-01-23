@@ -6,6 +6,8 @@ import java.nio.FloatBuffer;
 
 public class Vec3f {
 
+    public static final Vec3f ZERO = new Vec3f();
+
     public float x, y, z;
 
     /**

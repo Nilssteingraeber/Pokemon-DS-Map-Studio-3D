@@ -128,7 +128,7 @@ public class View3dMode extends ViewMode {
 
     @Override
     public void applyCameraTransform(MapDisplay d, GL2 gl) {
-        d.glu.gluPerspective(d.fovDeg, d.getAspectRatio(), getZNear(d), getZFar(d));
+        d.glu.gluPerspective(d.fovDeg, d.getAspectRatio(), getZNear(d) * 0.001f, getZFar(d));
     }
 
     @Override

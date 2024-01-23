@@ -341,7 +341,6 @@ public class MapLayerGL {
             quadsAdded.put(ID, numQuadsAdded + numQuads);
         }
     }
-
     private static void addTileToMap(Tile tile, HashMap<Integer, GeometryGL> geometryMap,
                                      float[] offsets, float[] scales, float[] scalesTex,
                                      HashMap<Integer, Integer> trisAdded,

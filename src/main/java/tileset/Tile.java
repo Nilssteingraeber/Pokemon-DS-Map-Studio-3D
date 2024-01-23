@@ -14,12 +14,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
 import javax.imageio.ImageIO;
 
 import graphicslib3D.Point3D;
+import math.vec.Vec3f;
 import utils.Utils;
 import utils.Utils.IntTuple;
 
@@ -35,8 +37,10 @@ public class Tile {
     public static int maxTileSize = 6;
     private int width;
     private int height;
+    private int zheight;
     private boolean xTileable;
     private boolean yTileable;
+    private boolean zTilable;
     private boolean uTileable;
     private boolean vTileable;
     private boolean globalTexMapping;
@@ -80,10 +84,20 @@ public class Tile {
     private float[] boundsSca;
 
     public Tile(Tileset tileset, String folderPath, String objFilename,
-                int width, int height, boolean xTileable, boolean yTileable,
+                int width, int height, int zHeight, boolean xTileable, boolean yTileable,
                 boolean uTileable, boolean vTileable,
                 boolean globalTexMapping, float globalTexScale,
                 float xOffset, float yOffset, float zOffset)
+            throws IOException, TextureNotFoundException,
+            NormalsNotFoundException {
+        this(tileset, folderPath, objFilename, width, height, zHeight, xTileable, yTileable, uTileable, vTileable, globalTexMapping, globalTexScale, xOffset, yOffset, zOffset, false);
+    }
+
+    public Tile(Tileset tileset, String folderPath, String objFilename,
+                int width, int height, int zHeight, boolean xTileable, boolean yTileable,
+                boolean uTileable, boolean vTileable,
+                boolean globalTexMapping, float globalTexScale,
+                float xOffset, float yOffset, float zOffset, boolean estimateSize)
             throws IOException, TextureNotFoundException,
             NormalsNotFoundException {
 
@@ -108,33 +122,46 @@ public class Tile {
 
         loadFromObj(folderPath, objFilename);
 
+        if(estimateSize) {
+
+        }
     }
 
     public Tile(Tileset tileset, String filePath) throws IOException,
             TextureNotFoundException, NormalsNotFoundException {
         this(tileset, new File(filePath).getParent(),
-                new File(filePath).getName(), 1, 1, false,
-                false, false, false, false, 1.0f,
-                0.0f, 0.0f, 0.0f);
+                new File(filePath).getName(), 1, 1, 1,
+                false, false, false, false, false,
+                1.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public Tile(Tileset tileset, String filePath, boolean estimateSize) throws IOException,
+            TextureNotFoundException, NormalsNotFoundException {
+        this(tileset, new File(filePath).getParent(),
+                new File(filePath).getName(), 1, 1, 1,
+                false, false, false, false, false,
+                1.0f, 0.0f, 0.0f, 0.0f);
     }
 
     public Tile(Tileset tileset, String filePath, Tile tile) throws IOException,
             TextureNotFoundException, NormalsNotFoundException {
         this(tileset, new File(filePath).getParent(),
-                new File(filePath).getName(), tile.getWidth(), tile.getHeight(),
-                tile.isXtileable(), tile.isYtileable(),
-                tile.isUtileable(), tile.isVtileable(),
+                new File(filePath).getName(), tile.getWidth(), tile.getHeight(), tile.getZheight(),
+                tile.isXtileable(),
+                tile.isYtileable(), tile.isUtileable(),
+                tile.isVtileable(),
                 tile.useGlobalTextureMapping(),
-                tile.getGlobalTextureScale(),
-                tile.getXOffset(), tile.getYOffset(), tile.getZOffset());
+                tile.getGlobalTextureScale(), tile.getXOffset(), tile.getYOffset(), tile.getZOffset());
     }
 
     public Tile() {
         width = 1;
         height = 1;
+        zheight = 1;
 
         xTileable = false;
         yTileable = false;
+        zTilable = false;
         uTileable = false;
         vTileable = false;
 
@@ -152,6 +179,7 @@ public class Tile {
 
         tile.width = width;
         tile.height = height;
+        tile.zheight = zheight;
         tile.xTileable = xTileable;
         tile.yTileable = yTileable;
         tile.uTileable = uTileable;
@@ -199,6 +227,7 @@ public class Tile {
 
         tile.width = width;
         tile.height = height;
+        tile.zheight = height;
         tile.xTileable = xTileable;
         tile.yTileable = yTileable;
         tile.uTileable = uTileable;
@@ -232,6 +261,7 @@ public class Tile {
         int hash = 7;
         hash = 11 * hash + this.width;
         hash = 11 * hash + this.height;
+        hash = 11 * hash + this.zheight;
         hash = 11 * hash + (this.xTileable ? 1 : 0);
         hash = 11 * hash + (this.yTileable ? 1 : 0);
         hash = 11 * hash + (this.uTileable ? 1 : 0);
@@ -268,6 +298,9 @@ public class Tile {
             return false;
         }
         if (this.height != other.height) {
+            return false;
+        }
+        if (this.zheight != other.zheight) {
             return false;
         }
         if (this.xTileable != other.xTileable) {
@@ -330,6 +363,9 @@ public class Tile {
             return false;
         }
         if (this.height != other.height) {
+            return false;
+        }
+        if (this.zheight != other.zheight) {
             return false;
         }
         if (this.xTileable != other.xTileable) {
@@ -1081,6 +1117,49 @@ public class Tile {
         }
     }
 
+    public void estimateSize() {
+
+
+        Vec3f smallest = new Vec3f();
+        Vec3f biggest = new Vec3f();
+
+        ArrayList<Vec3f> vertices = new ArrayList<>();
+
+        for(int i = 0; i < vCoordsObj.size() - 1; i += 3) {
+            vertices.add(new Vec3f(vCoordsObj.get(i + 1), vCoordsObj.get(i + 2), vCoordsObj.get(i + 3)));
+        }
+
+        for (Vec3f vertex: vertices) {
+            if(vertex.x > biggest.x) {
+                biggest.x = vertex.x;
+            }
+            if(vertex.y > biggest.y) {
+                biggest.y = vertex.y;
+            }
+            if(vertex.z > biggest.z) {
+                biggest.z = vertex.z;
+            }
+
+            if(vertex.x < smallest.x) {
+                smallest.x = vertex.x;
+            }
+            if(vertex.y < smallest.y) {
+                smallest.y = vertex.y;
+            }
+            if(vertex.z < smallest.z) {
+                smallest.z = vertex.z;
+            }
+        }
+
+        int width = (int) Math.round(Math.ceil(biggest.x - smallest.y));
+        int height = (int) Math.round(Math.ceil(biggest.y - smallest.y));
+        int zheight = (int) Math.round(Math.ceil(biggest.z - smallest.z));
+
+        this.width = width;
+        this.height = height;
+        this.zheight = zheight;
+    }
+
     public void updateObjData() {
         TileGeometryCompresser.compressTile(this);
     }
@@ -1123,6 +1202,10 @@ public class Tile {
 
     public int getHeight() {
         return height;
+    }
+
+    public int getZheight() {
+        return zheight;
     }
 
     public BufferedImage getThumbnail() {

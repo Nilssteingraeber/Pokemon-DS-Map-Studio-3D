@@ -240,7 +240,7 @@ public class TilesetEditorDialog extends JDialog {
         if (addTileDialog.getReturnValue() == AddTileDialog.APPROVE_OPTION) {
             float scale = addTileDialog.getScale();
             boolean flip = addTileDialog.flip();
-
+            boolean estimateSize = addTileDialog.estimateSize();
             final JFileChooser fc = new JFileChooser();
             if (handler.getLastTilesetDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
@@ -259,7 +259,13 @@ public class TilesetEditorDialog extends JDialog {
                     for (int i = 0; i < files.length; i++) {
                         File file = files[i];
                         try {
-                            Tile tile = new Tile(handler.getTileset(), file.getAbsolutePath());
+
+                            Tile tile = null;
+                            if(estimateSize) {
+                                tile = new Tile(handler.getTileset(), file.getAbsolutePath(), true);
+                            } else {
+                                tile = new Tile(handler.getTileset(), file.getAbsolutePath());
+                            }
 
                             if (scale != 1.0f) {
                                 tile.scaleModel(scale);

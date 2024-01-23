@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.TreeSet;
 
+import math.vec.Vec3f;
 import tileset.Tile;
 import tileset.Tileset;
 import utils.Utils;
@@ -83,6 +84,7 @@ public class MapEditorHandler {
     private int activeLayer = 0;
     private int[][] tileLayerCopy = null;
     private int[][] heightLayerCopy = null;
+    protected Vec3f cursor3d = new Vec3f(0, 0, 0);
 
     //Map State Hanlder
     private StateHandler mapStateHandler = new StateHandler();
@@ -691,6 +693,14 @@ public class MapEditorHandler {
 
     public int[][] getHeightLayerCopy() {
         return heightLayerCopy;
+    }
+
+    public Vec3f getCursor3d() {
+        return cursor3d;
+    }
+
+    public void setCursor3d(Vec3f position) {
+        cursor3d = position.clone();
     }
 
     public void clearCopyLayer() {

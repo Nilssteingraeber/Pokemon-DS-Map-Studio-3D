@@ -2,6 +2,7 @@
 package editor.mapdisplay;
 
 import com.jogamp.common.nio.Buffers;
+import com.jogamp.opengl.glu.GLUquadric;
 import editor.handler.MapEditorHandler;
 
 import com.jogamp.opengl.GL2;
@@ -10,8 +11,9 @@ import static com.jogamp.opengl.GL.*;
 import static com.jogamp.opengl.GL2ES1.GL_ALPHA_TEST;
 import static com.jogamp.opengl.GL2ES3.GL_TRIANGLES;
 import static com.jogamp.opengl.GL2ES3.GL_QUADS;
-import static com.jogamp.opengl.GL2GL3.GL_FILL;
-import static com.jogamp.opengl.GL2GL3.GL_LINE;
+import static com.jogamp.opengl.GL2GL3.*;
+import static com.jogamp.opengl.fixedfunc.GLLightingFunc.GL_QUADRATIC_ATTENUATION;
+import static com.jogamp.opengl.fixedfunc.GLLightingFunc.GL_SMOOTH;
 
 import com.jogamp.opengl.GLAutoDrawable;
 import com.jogamp.opengl.GLContext;
@@ -57,6 +59,7 @@ import java.nio.IntBuffer;
 import java.util.*;
 import javax.swing.SwingUtilities;
 
+import graphicslib3D.shape.Sphere;
 import math.mat.Mat4f;
 import math.transf.TransfMat;
 import math.vec.Vec3f;
@@ -89,10 +92,17 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
     protected float[] grid;
     protected FloatBuffer gridBuffer;
     protected float[] axis;
+    protected float[] gizmo;
+
     protected final float[] axisColors = {
             1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
             0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f};
+
+    protected final float[] gizmoAxisColors = {
+            1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1f,
+            0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1f,
+            0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1f};
 
     //Scene
     protected float cameraX, cameraY, cameraZ;
@@ -110,11 +120,14 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
     };
     protected final float fovDeg = 60.0f;
 
-    /** 3D-Drawing and collision stuff **/
+    /**
+     * 3D-Drawing and collision stuff
+     **/
     protected Vec3f mouseVector_WSP = new Vec3f(0, 0, 0);
 
     protected Vec3f mouseVectorOrigin_WSP = new Vec3f(0, 0, 0);
 
+    Vec3f editPlaneHitpoint = new Vec3f(0, 0, 0);
     protected Vec3f editPlaneOrigin_WSP = new Vec3f(0, 0, 0);
 
     protected Vec3f editPlaneNormal_WSP = new Vec3f(0, 1, 0);
@@ -166,6 +179,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         XZ,
         ZY
     }
+
     //Edit Modes
     public static enum EditMode {
 
@@ -224,6 +238,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         grid = Generator.generateCenteredGrid(cols, rows, gridTileSize, 0.02f);
         gridBuffer = Buffers.newDirectFloatBuffer(grid);
         axis = Generator.generateAxis(100.0f);
+        gizmo = Generator.generateAxis(1.0f, 0, 0, 0);
         editPlane_F = Generator.generateEditPlane(100f, new Vec3f(0, 0, 0), EditPlaneOrientation.XZ);
 
 
@@ -296,7 +311,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
             }
 
             //Draw axis
-            drawAxis();
+            //drawAxis();
 
             if (drawWireframeEnabled) {
                 if (handler.getTileset().size() > 0) {
@@ -314,12 +329,15 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
             }
 
             drawEditPlane();
+            draw3dCursor();
 
             //Screenshot
             if (screenshotRequested) {
                 drawScreenshot(gl);
                 screenshotRequested = false;
             }
+
+            drawGizmo();
 
             gl.glFinish();
         } catch (GLException ex) {
@@ -654,6 +672,19 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         g2d.setTransform(transf);
     }
 
+    protected Vec3f getVisualOffset() {
+        switch (currentEditPlaneOrientation) {
+            case XY:
+                return new Vec3f(0, 0, 0.05f);
+            case XZ:
+                return new Vec3f(0, 0.05f, 0);
+            case ZY:
+                return new Vec3f(0.05f, 0, 0);
+            default:
+                return Vec3f.ZERO;
+        }
+    }
+
     protected void drawBorderBounds(Graphics g, int xOffset, int yOffset, int outOffset) {
         g.drawRect(borderSize * tileSize + xOffset - outOffset, borderSize * tileSize + yOffset - outOffset,
                 tileSize * cols + 2 * outOffset, tileSize * rows + 2 * outOffset);
@@ -686,18 +717,103 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         gl.glEnable(GL_BLEND);
         gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         for (Point borderMap : gridBorderMaps) {
-            drawGrid(gl, borderMap.x * cols, -borderMap.y * rows, 0, 1.0f, 1.0f, 1.0f, 0.2f);
+            drawGrid(gl, borderMap.x * cols, -borderMap.y * rows, 0, 1.0f, 1.0f, 1.0f, 0.15f);
         }
     }
 
     protected void drawGridMaps(GL2 gl, HashMap<Point, MapData> maps) {
+        gl.glEnable(GL_BLEND);
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         Point mapSelected = handler.getMapSelected();
         for (Point map : maps.keySet()) {
             if (!map.equals(mapSelected)) {
                 drawGrid(gl, map.x * cols, -map.y * rows, 0, 1.0f, 1.0f, 1.0f, 1.0f);
             }
         }
-        drawGrid(gl, mapSelected.x * cols, -mapSelected.y * rows, 0, 1.0f, 0.9f, 0.9f, 1.0f);
+        drawGrid(gl, mapSelected.x * cols, -mapSelected.y * rows, 0, 1.0f, 0.9f, 0.9f, 0.4f);
+    }
+
+    protected void drawGizmo() {
+
+        if (true) {
+            GL2 gl = (GL2) GLContext.getCurrentGL();
+
+
+            gl.glMatrixMode(GL2.GL_PROJECTION);
+            gl.glLoadIdentity();
+            gl.glMatrixMode(GL2.GL_MODELVIEW);
+            gl.glLoadIdentity();
+
+            gl.glViewport((int) (getWidth() / 100f * 85f),
+                    (int) (getHeight() / 100f * 85f),
+                    (int) (getWidth() / 100f * 15f),
+                    (int) (getHeight() / 100f * 15f));
+
+            gl.glScaled(1, 1, -1);
+
+            gl.glRotatef(cameraRotX, -1, 0, 0);
+            gl.glRotatef(cameraRotY, 0, -1, 0);
+            gl.glRotatef(cameraRotZ, 0, 0, -1);
+
+
+
+
+            //*** Edit Plane
+            gl.glEnable(GL_DEPTH_TEST);
+            gl.glDepthFunc(GL_LEQUAL);
+            gl.glBegin(GL2.GL_POLYGON);
+
+            gl.glColor4fv(new float[]{0.5f, 0.5f, 0.5f, 1f}, 0);
+            editPlane_F = Generator.generateEditPlane(0.55f, new Vec3f(0f, 0f, -0.040f), currentEditPlaneOrientation);
+            for (int i = 0; i < editPlane_F.length; i += 3) {
+                gl.glVertex3fv(editPlane_F, i);
+            }
+            gl.glEnd();
+
+
+            //*** Axis
+            gl.glEnable(GL_DEPTH_TEST);
+            gl.glDepthFunc(GL_LESS);
+            gl.glLineWidth(3f);
+
+            gl.glBegin(GL_LINES);
+            gizmo = Generator.generateAxis(0.7f);
+            int gizmoAxis = 0;
+            for (int i = 0; i < gizmo.length; i += 3) {
+                gl.glColor4fv(gizmoAxisColors, gizmoAxis);
+                gl.glVertex3fv(gizmo, i);
+                gizmoAxis += 4;
+            }
+            gl.glEnd();
+
+
+            // *** GRID
+            gl.glEnable(GL_DEPTH_TEST);
+            gl.glDepthFunc(GL_LESS);
+            gl.glLineWidth(1f);
+
+            gl.glBegin(GL_LINES);
+            gl.glColor4fv(new float[]{0.8f, 0.8f, 0.8f, 1.0f}, 0);
+            float s = 0.5f;
+            for(float x = -s; x <= s; x += 0.25) {
+                gl.glVertex3fv(new float[]{x, s, -0.05f}, 0);
+                gl.glVertex3fv(new float[]{x, -s, -0.05f}, 0);
+            }
+            for(float y = -s; y <= s; y += 0.25) {
+                gl.glVertex3fv(new float[]{s, y, -0.05f}, 0);
+                gl.glVertex3fv(new float[]{-s, y, -0.05f}, 0);
+            }
+            gl.glEnd();
+
+
+
+
+
+
+
+            gl.glPopMatrix();
+            gl.glViewport(0, 0, getWidth(), getHeight());
+        }
     }
 
     protected void drawAxis() {
@@ -710,8 +826,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         gl.glEnable(GL_DEPTH_TEST);
         gl.glDepthFunc(GL_LEQUAL);
 
-        gl.glLineWidth(1f);
-
+        gl.glLineWidth(2f);
         gl.glBegin(GL_LINES);
         for (int i = 0; i < axis.length; i += 3) {
             gl.glColor3fv(axisColors, i);
@@ -721,23 +836,198 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         gl.glEnd();
     }
 
+    //        XY,
+    //        XZ,
+    //        ZY
+    protected void rotateEditPlaneForward() {
+        if (currentEditPlaneOrientation == EditPlaneOrientation.XY) {
+            currentEditPlaneOrientation = EditPlaneOrientation.XZ;
+            repaint();
+            return;
+        }
+        if (currentEditPlaneOrientation == EditPlaneOrientation.XZ) {
+            currentEditPlaneOrientation = EditPlaneOrientation.ZY;
+            repaint();
+            return;
+        }
+
+        if (currentEditPlaneOrientation == EditPlaneOrientation.ZY) {
+            currentEditPlaneOrientation = EditPlaneOrientation.XY;
+            repaint();
+        }
+    }
+
+    protected void rotateEditPlaneBackward() {
+        if (currentEditPlaneOrientation == EditPlaneOrientation.XY) {
+            currentEditPlaneOrientation = EditPlaneOrientation.ZY;
+            repaint();
+            return;
+        }
+        if (currentEditPlaneOrientation == EditPlaneOrientation.ZY) {
+            currentEditPlaneOrientation = EditPlaneOrientation.XZ;
+            repaint();
+            return;
+        }
+
+        if (currentEditPlaneOrientation == EditPlaneOrientation.XZ) {
+            currentEditPlaneOrientation = EditPlaneOrientation.XY;
+            repaint();
+        }
+    }
+
+    protected void draw3dCursor() {
+        GL2 gl = (GL2) GLContext.getCurrentGL();
+
+
+        gl.glEnable(GL_BLEND);
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl.glEnable(GL_MULTISAMPLE);
+        gl.glDepthFunc(GL_ALWAYS);
+        gl.glLineWidth(3f);
+        gl.glBegin(GL_LINES);
+
+        float s = (float) (0.25f);
+        gl.glColor3fv(axisColors, 1);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x + 0.0f, handler.getCursor3d().y + 0.0f, handler.getCursor3d().z + s}, 0);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x + 0.0f, handler.getCursor3d().y + 0.0f, handler.getCursor3d().z - s}, 0);
+
+        gl.glColor3fv(axisColors, 0);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x + s, handler.getCursor3d().y + 0.0f, handler.getCursor3d().z + 0.0f}, 0);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x - s, handler.getCursor3d().y + 0.0f, handler.getCursor3d().z + 0.0f}, 0);
+
+        gl.glColor3fv(axisColors, 2);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x + 0.0f, handler.getCursor3d().y + s, handler.getCursor3d().z + 0.0f}, 0);
+        gl.glVertex3fv(new float[]{handler.getCursor3d().x + 0.0f, handler.getCursor3d().y - s, handler.getCursor3d().z + 0.0f}, 0);
+
+        gl.glEnd();
+    }
+
     protected void drawEditPlane() {
         GL2 gl = (GL2) GLContext.getCurrentGL();
 
         gl.glEnable(GL_BLEND);
-
-        gl.glEnable(GL_BLEND);
         gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
         gl.glBegin(GL_QUADS);
 
         gl.glColor3fv(new float[]{1.0f, 0, 0}, 0);
 
-        editPlane_F = Generator.generateEditPlane(3, new Vec3f(0, 0, 0), currentEditPlaneOrientation);
 
-        for (int i = 0; i < editPlane_F.length; i += 3) {
-            gl.glColor4fv(new float[]{1.0f, 0, 0, 0.5f}, 0);
-            gl.glVertex3fv(editPlane_F, i);
+        if (handler.getTileset().size() > 0) {
+            Tile tile = handler.getTileset().get(handler.getTileIndexSelected());
+
+            Vec3f temp = editPlaneHitpoint.clone();
+            temp.x = (float) Math.floor(temp.x);
+            temp.y = (float) Math.floor(temp.y);
+            temp.z = (float) Math.floor(temp.z);
+
+            Vec3f corner = temp.clone();
+            corner.x += tile.getWidth();
+            corner.y += tile.getHeight();
+            corner.z += 1;
+
+            temp.add(getVisualOffset());
+            corner.add(getVisualOffset());
+
+            editPlane_F = Generator.generateEditPlane(temp, corner, currentEditPlaneOrientation);
+
+            for (int i = 0; i < editPlane_F.length; i += 3) {
+                gl.glColor4fv(new float[]{1.0f, 0, 0, 0.5f}, 0);
+                gl.glVertex3fv(editPlane_F, i);
+            }
+        }
+
+        gl.glEnd();
+
+
+
+        // *** GRID
+        gl.glEnable(GL_DEPTH_TEST);
+        gl.glDepthFunc(GL_ALWAYS);
+        gl.glLineWidth(2f);
+
+        gl.glBegin(GL_LINES);
+        gl.glColor4fv(new float[]{0.8f, 0.4f, 0.4f, 1.0f}, 0);
+
+        float s = 2f;
+
+        float cursor_x = handler.getCursor3d().x;
+        float cursor_y = handler.getCursor3d().y;
+        float cursor_z = handler.getCursor3d().z;
+        
+        switch (currentEditPlaneOrientation) {
+            case XY:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{x + cursor_x, s + cursor_y, 0 + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{x + cursor_x, -s + cursor_y, 0 + cursor_z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{s + cursor_x, y + cursor_y, 0 + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{-s + cursor_x, y + cursor_y, 0 + cursor_z}, 0);
+                }
+                break;
+
+            case XZ:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{x + cursor_x, 0 + cursor_y, s + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{x + cursor_x, 0 + cursor_y, -s + cursor_z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{s + cursor_x, 0 + cursor_y, y + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{-s + cursor_x, 0 + cursor_y, y + cursor_z}, 0);
+                }
+                break;
+
+            case ZY:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{0 + cursor_x, s + cursor_y, x + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{0 + cursor_x, -s + cursor_y, x + cursor_z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{0 + cursor_x , -y + cursor_y, s + cursor_z}, 0);
+                    gl.glVertex3fv(new float[]{0 + cursor_x, -y + cursor_y, -s + cursor_z}, 0);
+                }
+                break;
+        }
+
+        Vec3f temp = editPlaneHitpoint.clone();
+        temp.x = (float) Math.round(temp.x);
+        temp.y = (float) Math.round(temp.y);
+        temp.z = (float) Math.round(temp.z);
+        gl.glColor4fv(new float[]{0.8f, 0.6f, 0.6f, 0.6f}, 0);
+        s = 1f;
+        switch (currentEditPlaneOrientation) {
+            case XY:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{x + temp.x, s + temp.y, 0 + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{x + temp.x, -s + temp.y, 0 + temp.z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{s + temp.x, y + temp.y, 0 + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{-s + temp.x, y + temp.y, 0 + temp.z}, 0);
+                }
+                break;
+
+            case XZ:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{x + temp.x, 0 + temp.y, s + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{x + temp.x, 0 + temp.y, -s + temp.z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{s + temp.x, 0 + temp.y, y + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{-s + temp.x, 0 + temp.y, y + temp.z}, 0);
+                }
+                break;
+
+            case ZY:
+                for(float x = -s; x <= s; x += 1f) {
+                    gl.glVertex3fv(new float[]{0 + temp.x, s + temp.y, x + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{0 + temp.x, -s + temp.y, x + temp.z}, 0);
+                }
+                for(float y = -s; y <= s; y += 1f) {
+                    gl.glVertex3fv(new float[]{ + temp.x , -y + temp.y, s + temp.z}, 0);
+                    gl.glVertex3fv(new float[]{0 + temp.x, -y + temp.y, -s + temp.z}, 0);
+                }
+                break;
         }
 
         gl.glEnd();
@@ -1079,21 +1369,21 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         return dir;
     }
 
-    public static void rotToUp(Vec3f rot, Vec3f dst){
+    public static void rotToUp(Vec3f rot, Vec3f dst) {
         dst.set(0.0f, 1.0f, 0.0f);
         dst.mul(TransfMat.eulerDegToMat_(rot));
     }
 
-    public static Vec3f rotToUp_(Vec3f rot){
+    public static Vec3f rotToUp_(Vec3f rot) {
         Vec3f dst = new Vec3f();
         rotToUp(rot, dst);
         return dst;
     }
 
-    public static float distPointPlaneSigned(Vec3f point, Vec3f[] plane){
+    public static float distPointPlaneSigned(Vec3f point, Vec3f[] plane) {
         Vec3f normal = plane[1].sub_(plane[0]).cross(plane[2].sub_(plane[0])).normalize();
         //Vec3f normal = plane[2].sub_(plane[1]).cross(plane[0].sub_(plane[1])).normalize();
-        return normal.dot(point) -normal.dot(plane[0]);
+        return normal.dot(point) - normal.dot(plane[0]);
     }
 
     protected void applyCameraTransform(GL2 gl) {
@@ -1183,14 +1473,22 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
     protected void updateMouseWorldRay(MouseEvent e) {
         screenPositionToWorldRay(e);
 
-        Vec3f hitpoint = new Vec3f(0, 0, 0);
+        Vec3f normal = Vec3f.ZERO;
+        switch (currentEditPlaneOrientation) {
+            case XY:
+                normal = new Vec3f(0, 0, 1);
+                break;
+            case XZ:
+                normal = new Vec3f(0, 1, 0);
+                break;
+            case ZY:
+                normal = new Vec3f(1, 0, 0);
+                break;
+        }
 
-        Vec3f rayOrigin = mouseVectorOrigin_WSP;
-        Vec3f ray = new Vec3f(rayOrigin);
-        Vec3f normal = new Vec3f(0, 0, 1);
-        Vec3f planeCenter = new Vec3f(0, 1, 0);
 
-        hitpoint = intersectPoint(ray, rayOrigin, normal, planeCenter);
+        Vec3f planeCenter = new Vec3f(0, 0, 0);
+        editPlaneHitpoint = intersectPoint(mouseVector_WSP, mouseVectorOrigin_WSP, normal, planeCenter);
     }
 
     public static Vec3f intersectPoint(Vec3f rayVector, Vec3f rayPoint, Vec3f planeNormal, Vec3f planePoint) {
@@ -1206,23 +1504,33 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         float xMouse = ((((float) e.getX() / getWidth())));
         float yMouse = ((((float) e.getY() / getHeight())));
 
+        Mat4f rx = TransfMat.rotationDeg_(-cameraRotX, new Vec3f(1.0f, 0.0f, 0.0f));
+        Mat4f ry = TransfMat.rotationDeg_(-cameraRotY, new Vec3f(0.0f, 1.0f, 0.0f));
+        Mat4f rz = TransfMat.rotationDeg_(-cameraRotZ, new Vec3f(0.0f, 0.0f, 1.0f));
+        Vec3f tarPos = new Vec3f(cameraX, cameraY, 0.0f);
+        Vec3f camDir = rotToDir_(new Vec3f(cameraRotX, cameraRotY, cameraRotZ));
+        Vec3f camPos = tarPos.add_(camDir.negate_().scale_(cameraZ));
+        Mat4f t = TransfMat.translation_(camPos.negate_());
+        camModelView = rx.mul_(ry).mul(rz).mul(t);
+        camProj = TransfMat.perspective_(60.0f, (float) getWidth() / getHeight(), 1.0f, 1000.0f);
+        camMVP = camProj.mul_(camModelView);
+
         Vec4f screenPos = new Vec4f(((float) xMouse) * 2 - 1, ((float) -yMouse) * 2 + 1, 0, 1.0f);
         Vec4f a = screenPos;
-        a.mul(camMVP.inverse());
+        a.mul(camMVP.inverse_());
         float xMouse3d = a.x / a.w;
         float yMouse3d = a.y / a.w;
         float zMouse3d = a.z / a.w;
 
         screenPos = new Vec4f(((float) xMouse) * 2 - 1, ((float) -yMouse) * 2 + 1, 1, 1.0f);
         Vec4f b = screenPos;
-        b.mul(camMVP);
-
+        b.mul(camMVP.inverse_());
         float xMouse3dF = b.x / b.w;
         float yMouse3dF = b.y / b.w;
         float zMouse3dF = b.z / b.w;
 
-        mouseVector_WSP = new Vec3f(xMouse3dF - xMouse3d, yMouse3dF - yMouse3d, zMouse3dF - zMouse3d);
-        mouseVectorOrigin_WSP = new Vec3f(xMouse3d, yMouse3d, zMouse3dF);
+        mouseVector_WSP = new Vec3f(xMouse3d - xMouse3dF, yMouse3d - yMouse3dF, zMouse3d - zMouse3dF);
+        mouseVectorOrigin_WSP = new Vec3f(xMouse3d, yMouse3d, zMouse3d);
     }
 
     protected void zoomCameraOrtho(MouseWheelEvent e) {
@@ -1361,6 +1669,40 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         if (isPointInsideGrid(p.x, p.y) && tileGrid[p.x][p.y] != -1) {
             tileGrid[p.x][p.y] = -1;
             //updateMapThumbnail(e);
+        }
+    }
+
+    protected void updateCursorPosition() {
+
+        Vec3f temp = editPlaneHitpoint.clone();
+        temp.x = (float) Math.round(temp.x);
+        temp.y = (float) Math.round(temp.y);
+        temp.z = (float) Math.round(temp.z);
+
+        this.handler.setCursor3d(temp);
+    }
+    protected void setTileIn3dGrid(MouseEvent e) {
+        if (handler.getTileset().size() > 0) {
+            Vec3f temp = editPlaneHitpoint.clone();
+            temp.x = (float) Math.floor(temp.x) + 16;
+            temp.y = (float) Math.floor(temp.y) + 16;
+            temp.z = (float) Math.floor(temp.z);
+
+            int x = (int) temp.x;
+            int y = (int) temp.y;
+
+            Point p = null;
+            int[][] tileGrid = handler.getActiveTileLayer();
+            int[][] heightGrid = handler.getActiveHeightLayer();
+
+            Tile tile = handler.getTileSelected();
+
+            if (isPointInsideGrid(x, y) && tileGrid[x][y] != handler.getTileIndexSelected()) {
+                System.out.println("Xg: " + x + " Yg: " + y);
+                clearAreaUnderTile(tileGrid, x, y, tile.getWidth(), tile.getHeight());
+                tileGrid[x][y] = handler.getTileIndexSelected();
+                //updateMapThumbnail(e);
+            }
         }
     }
 
@@ -1513,7 +1855,7 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
 
         cameraZ = 80.0f;
 
-        handler.getMainFrame().getJtbModeClear().setEnabled(false);
+        handler.getMainFrame().getJtbModeClear().setEnabled(true);
         handler.getMainFrame().getJtbModeSmartPaint().setEnabled(false);
         handler.getMainFrame().getJtbModeInvSmartPaint().setEnabled(false);
 
@@ -1620,41 +1962,61 @@ public class MapDisplay extends GLJPanel implements GLEventListener, MouseListen
         return (float) getWidth() / getHeight();
     }
 
-    public boolean isSphereInsideFrustum(Vec3f spherePos, float radius, Vec3f[][] frustum){
-        for(Vec3f[] plane : frustum){
+    public boolean isSphereInsideFrustum(Vec3f spherePos, float radius, Vec3f[][] frustum) {
+        for (Vec3f[] plane : frustum) {
             float distance = distPointPlaneSigned(spherePos, plane);
-            if(distance < -radius){
+            if (distance < -radius) {
                 return false;
-            }else if(distance < radius){
+            } else if (distance < radius) {
                 //return false;
             }
         }
         return true;
     }
 
-    public HashMap<Point, MapData> getMapsInsideFrustum(Vec3f[][] frustum){
+    public HashMap<Point, MapData> getMapsInsideFrustum(Vec3f[][] frustum) {
         float radius = (float) Math.sqrt((MapGrid.cols * MapGrid.cols) / 2.0f);
         HashMap<Point, MapData> maps = new HashMap<Point, MapData>();
         for (HashMap.Entry<Point, MapData> map : handler.getMapMatrix().getMatrix().entrySet()) {
             Point p = map.getKey();
             Vec3f center = new Vec3f(p.x * MapGrid.cols, -p.y * MapGrid.rows, 0.0f);
-            if(isSphereInsideFrustum(center, radius, frustum)){
+            if (isSphereInsideFrustum(center, radius, frustum)) {
                 maps.put(map.getKey(), map.getValue());
             }
         }
         return maps;
     }
 
-    public HashSet<Point> getGridBorderMapsInsideFrustum(Vec3f[][] frustum){
+    public HashSet<Point> getGridBorderMapsInsideFrustum(Vec3f[][] frustum) {
         float radius = (float) Math.sqrt((MapGrid.cols * MapGrid.cols) / 2.0f);
         HashSet<Point> borderMaps = new HashSet<>();
         for (Point borderMap : handler.getMapMatrix().getBorderMaps()) {
             Vec3f center = new Vec3f(borderMap.x * MapGrid.cols, -borderMap.y * MapGrid.rows, 0.0f);
-            if(isSphereInsideFrustum(center, radius, frustum)){
+            if (isSphereInsideFrustum(center, radius, frustum)) {
                 borderMaps.add(borderMap);
             }
         }
         return borderMaps;
+    }
+
+    protected void drawTile3dPreview(GL2 gl, HashMap<Point, MapData> maps) {
+        gl.glEnable(GL_BLEND);
+
+        //this.handler.addMapState(new MapLayerState("Draw Tile", d.handler));
+        //this.setTileInGrid(e);
+        this.updateActiveMapLayerGL();
+        this.repaint();
+
+        gl.glBlendFunc(GL2.GL_ONE, GL2.GL_ONE_MINUS_SRC_ALPHA);
+        //gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        gl.glEnable(GL_DEPTH_TEST);
+        gl.glDepthFunc(GL_LESS); //Less instead of equal for drawing the grid
+
+        gl.glEnable(GL_ALPHA_TEST);
+        gl.glAlphaFunc(GL_NOTEQUAL, 0.0f);
+
+
     }
 
     boolean checkOpenGLError() {

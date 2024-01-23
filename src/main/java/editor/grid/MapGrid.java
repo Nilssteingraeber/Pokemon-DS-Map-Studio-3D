@@ -32,6 +32,7 @@ public class MapGrid {
 //    private static final String bdhcTag = "bdhc";
     public static final int cols = 32;
     public static final int rows = 32;
+
     public static final int tileSize = 16;
     public static final int width = cols * tileSize;
     public static final int height = rows * tileSize;

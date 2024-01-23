@@ -22,27 +22,36 @@ public class Edit3dMode extends ViewMode {
         d.lastMouseX = e.getX();
         d.lastMouseY = e.getY();
         switch (d.editMode) {
-            case MODE_ZOOM:
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    d.cameraZ /= 1.5;
-                    d.repaint();
-                } else if (SwingUtilities.isRightMouseButton(e)) {
-                    d.cameraZ *= 1.5;
+            case MODE_EDIT:
+                if(SwingUtilities.isLeftMouseButton(e)) {
+                    d.updateMouseWorldRay(e);
+                    d.setTileIn3dGrid(e);
+                    d.updateActiveMapLayerGL();
                     d.repaint();
                 }
-                break;
         }
     }
 
     @Override
     public void mouseReleased(MapDisplay d, MouseEvent e) {
-
+        d.updateMouseWorldRay(e);
+        d.repaint();
     }
 
     @Override
     public void mouseDragged(MapDisplay d, MouseEvent e) {
         if (d.editMode != MapDisplay.EditMode.MODE_ZOOM) {
             if (SwingUtilities.isLeftMouseButton(e)) {
+                d.updateMouseWorldRay(e);
+            } else if (SwingUtilities.isMiddleMouseButton(e)) {
+                float delta = 100.0f;
+                d.cameraRotZ -= (((float) ((e.getX() - d.lastMouseX))) / d.getWidth()) * delta;
+                d.lastMouseX = e.getX();
+                d.cameraRotX -= (((float) ((e.getY() - d.lastMouseY))) / d.getHeight()) * delta;
+                d.lastMouseY = e.getY();
+                d.repaint();
+            } else if (SwingUtilities.isRightMouseButton(e)
+                    | SwingUtilities.isMiddleMouseButton(e)) {
                 float dist = d.cameraZ;
                 float deltaX = (((float) ((e.getX() - d.lastMouseX))) / d.getWidth()) * dist;
                 float deltaZ = (((float) ((e.getY() - d.lastMouseY))) / d.getHeight()) * dist;
@@ -58,14 +67,6 @@ public class Edit3dMode extends ViewMode {
                 d.lastMouseY = e.getY();
 
                 d.repaint();
-            } else if (SwingUtilities.isRightMouseButton(e)
-                    | SwingUtilities.isMiddleMouseButton(e)) {
-                float delta = 100.0f;
-                d.cameraRotZ -= (((float) ((e.getX() - d.lastMouseX))) / d.getWidth()) * delta;
-                d.lastMouseX = e.getX();
-                d.cameraRotX -= (((float) ((e.getY() - d.lastMouseY))) / d.getHeight()) * delta;
-                d.lastMouseY = e.getY();
-                d.repaint();
             }
         }
     }
@@ -73,6 +74,7 @@ public class Edit3dMode extends ViewMode {
     @Override
     public void mouseMoved(MapDisplay d, MouseEvent e) {
         d.updateMouseWorldRay(e);
+        d.repaint();
     }
 
     @Override
@@ -102,6 +104,15 @@ public class Edit3dMode extends ViewMode {
                 d.setCameraAtNextMapAndSelect(new Point(0, 1));
                 d.repaint();
                 break;
+            case KeyEvent.VK_Q:
+                d.rotateEditPlaneForward();
+                break;
+            case KeyEvent.VK_E:
+                d.rotateEditPlaneBackward();
+                break;
+            case KeyEvent.VK_S:
+                d.updateCursorPosition();
+                d.repaint();
         }
     }
 

@@ -35,15 +35,41 @@ public class Generator {
         return grid;
     }
 
+    public static float[] generateEditPlane(Vec3f origin, Vec3f corner, MapDisplay.EditPlaneOrientation orientation) {
+        float[] vertices = new float[4 * 3];
+
+        switch (orientation) {
+            case XY:
+                set3f(vertices, 0, origin.x, origin.y, 0.0f);
+                set3f(vertices, 3, corner.x, origin.y, 0.0f);
+                set3f(vertices, 6, corner.x, corner.y, 0.0f);
+                set3f(vertices, 9, origin.x, corner.y, 0.0f);
+                break;
+            case XZ:
+                set3f(vertices, 0, origin.x, 0.0f, origin.z);
+                set3f(vertices, 3, corner.x, 0.0f, origin.z);
+                set3f(vertices, 6, corner.x, 0.0f, corner.z);
+                set3f(vertices, 9, origin.x, 0.0f, corner.z);
+                break;
+            case ZY:
+                set3f(vertices, 0, 0.0f, origin.y, origin.z);
+                set3f(vertices, 3, 0.0f, corner.y, origin.z);
+                set3f(vertices, 6, 0.0f, corner.y, corner.z);
+                set3f(vertices, 9, 0.0f, origin.y, corner.z);
+                break;
+        }
+
+        return vertices;
+    }
     public static float[] generateEditPlane(float size, Vec3f origin, MapDisplay.EditPlaneOrientation orientation) {
         float[] vertices = new float[4 * 3];
 
         switch (orientation) {
             case XY:
-                set3f(vertices, 0, origin.x - size / 2, origin.y + size / 2, 0.0f);
-                set3f(vertices, 3, origin.x + size / 2, origin.y + size / 2, 0.0f);
-                set3f(vertices, 6, origin.x + size / 2, origin.y - size / 2, 0.0f);
-                set3f(vertices, 9, origin.x - size / 2, origin.y - size / 2, 0.0f);
+                set3f(vertices, 0, origin.x - size / 2, origin.y + size / 2, origin.z);
+                set3f(vertices, 3, origin.x + size / 2, origin.y + size / 2, origin.z);
+                set3f(vertices, 6, origin.x + size / 2, origin.y - size / 2, origin.z);
+                set3f(vertices, 9, origin.x - size / 2, origin.y - size / 2, origin.z);
                 break;
             case XZ:
                 set3f(vertices, 0, origin.x - size / 2, 0.0f, origin.z + size / 2);
@@ -52,10 +78,10 @@ public class Generator {
                 set3f(vertices, 9, origin.x - size / 2, 0.0f, origin.z - size / 2);
                 break;
             case ZY:
-                set3f(vertices, 0, 0.0f, origin.y - size / 2, origin.z + size / 2);
-                set3f(vertices, 3, 0.0f, origin.y + size / 2, origin.z + size / 2);
-                set3f(vertices, 6, 0.0f, origin.y + size / 2, origin.z - size / 2);
-                set3f(vertices, 9, 0.0f, origin.y - size / 2, origin.z - size / 2);
+                set3f(vertices, 0, origin.x, origin.y - size / 2, origin.z + size / 2);
+                set3f(vertices, 3, origin.x, origin.y + size / 2, origin.z + size / 2);
+                set3f(vertices, 6, origin.x, origin.y + size / 2, origin.z - size / 2);
+                set3f(vertices, 9, origin.x, origin.y - size / 2, origin.z - size / 2);
                 break;
         }
 
@@ -114,6 +140,18 @@ public class Generator {
         return grid;
     }
 
+    public static float[] generateAxis(float size, float x, float y, float z) {
+        float[] axis = new float[3 * 3 * 2];
+
+        set3f(axis, 0, 0.0f + x, 0.0f + y, 0.0f + z);
+        set3f(axis, 3, size + x, 0.0f + y, 0.0f + z);
+        set3f(axis, 6, 0.0f + x, 0.0f + y, 0.0f + z);
+        set3f(axis, 9, 0.0f + x, size + y, 0.0f + z);
+        set3f(axis, 12, 0.0f + x, 0.0f + y, 0.0f + z);
+        set3f(axis, 15, 0.0f + x, 0.0f + y, size + z);
+
+        return axis;
+    }
     public static float[] generateAxis(float size) {
         float[] axis = new float[3 * 3 * 2];
 
