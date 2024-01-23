@@ -1,19 +1,19 @@
-JFDML JFormDesigner: "7.0.2.6.321" Java: "11.0.8" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.1.0.348" Java: "17.0.6" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
 	root: new FormRoot {
 		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class org.jdesktop.layout.GroupLayout ) {
-			"$horizontalGroup": "par l {seq {space :::p, par l {comp jPanel1:::::x, seq {comp jbAccept:::p:98:p, space :::x, comp jbCancel:::p:105:p}}, space :::p}}"
-			"$verticalGroup": "par l {seq l {space :::p, comp jPanel1:::p::p, space :::p, par b {comp jbAccept::b:p::p, comp jbCancel::b:p::p}, space :::x}}"
+			"$horizontalGroup": "par l {seq l {space :::p, par l {comp jPanel1:::::x, seq {comp jbAccept:::p:98:p, space :::x, comp jbCancel:::p:105:p}}, space :::p}}"
+			"$verticalGroup": "par l {seq l {space :::p, comp jPanel1:::p::p, space :::p, par b {comp jbAccept::b:p::p, comp jbCancel::b:p::p}, space ::13:x}}"
 		} ) {
 			name: "this"
 			"defaultCloseOperation": 2
 			"title": "Import Tile Settings"
 			"modal": true
 			add( new FormContainer( "javax.swing.JPanel", new FormLayoutManager( class org.jdesktop.layout.GroupLayout ) {
-				"$horizontalGroup": "par l {seq {space :::p, par l {seq {comp jLabel1:::p:43:p, space u:::p, comp jtfScale:::p:86:p, space :::p, comp jbApplyScale:::p::p}, comp jcbFlip:::p::p}, space :::x}}"
-				"$verticalGroup": "par l {seq l {space :::p, par b {comp jLabel1::b:p::p, comp jtfScale::b:p::p, comp jbApplyScale::b:p::p}, space u:::p, comp jcbFlip:::p::p, space :::x}}"
+				"$horizontalGroup": "par l {seq {space :::p, par l {seq {par l {comp jcbFlip::l:p::p, seq l {comp jLabel1:::p:43:p, space u:::p, comp jtfScale:::p:86:p, space :::p, comp jbApplyScale:::p::p}}, space :0:0:x}, comp jcbEstimate::l:::x}, space :::p}}"
+				"$verticalGroup": "par l {seq l {space :::p, par b {comp jLabel1::b:p::p, comp jtfScale::b:p::p, comp jbApplyScale::b:p::p}, space u:::p, comp jcbFlip:::p::p, space :::p, comp jcbEstimate:::p::p, space ::30:x}}"
 			} ) {
 				name: "jPanel1"
 				"border": new javax.swing.border.TitledBorder( "Settings" )
@@ -35,6 +35,11 @@ new FormModel {
 					"text": "Apply"
 					addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "jbApplyScaleActionPerformed", true ) )
 				} )
+				add( new FormComponent( "javax.swing.JCheckBox" ) {
+					name: "jcbEstimate"
+					"text": "Estimate tile sizes"
+					addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "jcbEstimate", true ) )
+				} )
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "jbAccept"
@@ -47,7 +52,7 @@ new FormModel {
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "jbCancelActionPerformed", true ) )
 			} )
 		}, new FormLayoutConstraints( null ) {
-			"size": new java.awt.Dimension( 395, 180 )
+			"size": new java.awt.Dimension( 395, 235 )
 			"location": new java.awt.Point( 0, 0 )
 		} )
 	}
